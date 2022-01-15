@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title></title>
+</head>
+
+<body>
+  <div id="status" style="border: 1px #d1dbe5; width: 500px; height: 300px; overflow: scroll; background-color: #9fdbbe;">
+
+  </div>
+  <input id="msg" type="text" />
+  <button onclick="sendMsg()">发送</button>
+  <br/>
+  <input id="roomId" type="text" />
+  <button onclick="joinRoom($('#roomId').val())">切换房间</button>
+
+  <script src="${request.contextPath}/static/js/jquery-1.9.1.min.js"></script>
+  <script src="${request.contextPath}/static/js/socket.io.js"></script>
+
+
+</body>
+<script>
+  let clientId = randomNum(1, 10) + '-' + randomNum(1, 20) + '-' + randomNum(1, 30);
+  let roomId = "default";
+
+  /**
+   *  变量声明
+   */
+  const _ws = {
+    params: {},             //  socket参数
+    uri:'ws://127.0.0.1:9901',
+    defaultImSocket: null,  //  默认socket对象
+
+    /**
+     *  初始化默认websocket连接
+     * @param uId
+     * @param uName
+     */
+    initDefaultImSocket: function(uId, uName) {
+      let that = this;
+      this.params = {
+        query : 'clientId='+clientId
+      }
+
+      this.defaultImSocket = io.connect(this.uri+'/default', this.params);
+      this.defaultImSocket.on('connect', function () {
+        //  连接成功1s后，将用户信息注册到服务器
+        setStatus('已连接服务器!');
+        setTimeout(function() {
+          that.register();
+        }, 1000)
+      });
+      this.defaultImSocket.on('disconnect', function () {
+        setStatus('连接已断开!');
+      });
+
+      /**
+       *  绑定ackevent2事件
+       *  ackServerCallback 服务端的回调
+       *  data 参数
+       */
+      this.defaultImSocket.on('ackevent2', function (data, data2, ackServerCallback) {
+        console.log(data2)
+        console.log(data.userName + ":" + data.message)
+        if (ackServerCallback) {
+          ackServerCallback('server message was delivered to client!');
+        }
+      });
+
+      this.defaultImSocket.on('ackevent3', function (data, ackServerCallback) {
+        console.log(data.userName + ":" + data.message)
+        if (ackServerCallback) {
+          ackServerCallback();
+        }
+      });
+
+      this.defaultImSocket.on('SEND_MSG', function (data, ackServerCallback) {
+        setStatus(data.msg)
+        if (ackServerCallback) {
+          ackServerCallback();
+        }
+      });
+    },
+
+    /**
+     *  用户登记在线状态
+     */
+    register: function() {
+      this.defaultImSocket.emit('REGISTER', {
+        '@class': 'com.itic.im.core.model.Online',
+        // userId: USER.userId,
+        // userName: USER.userName,
+        clientId: clientId,
+        roomId: roomId
+      }, function(arg1, arg2) {
+        // alert("ack from server! arg1: " + arg1 + ", arg2: " + arg2);
+        setStatus('客户端已成功注册!');
+
+        joinRoom(roomId)
+      });
+    },
+    registerCallBack: function () {
+      console.log("userId: " + USER.userId + " 的用户登记到在线用户表成功！");
+    },
+    remove: function () {
+      this.defaultImSocket.close();
+    }
+  }
+
+  function setStatus(v) {
+    $("#status").append('<span>'+v+'</span> <br />');
+  }
+
+  function joinRoom(r) {
+    _ws.defaultImSocket.emit('JOIN_ROOM', {
+      clientId: clientId,
+      roomId: r
+    }, function(arg1, arg2) {
+      roomId = r;
+      setStatus('已加入房间'+r)
+    });
+  }
+  /**
+   * 发送数据两种方式
+   * 1. 直接调用emit方法
+   * 2. 调用后端api
+   */
+  function sendMsg() {
+    let msg = $("#msg").val();
+    _ws.defaultImSocket.emit('SEND_MSG', {
+      '@class': 'com.itic.im.core.model.DefaultPushMessage',
+      clientId: clientId,
+      roomId: roomId,
+      msg:msg,
+      excludedClientId: clientId
+    }, function(arg1, arg2) {
+      setStatus('已发送:' + msg);
+    });
+  }
+
+  //生成从minNum到maxNum的随机数
+  function randomNum(minNum,maxNum){
+    switch(arguments.length){
+      case 1:
+        return parseInt(Math.random()*minNum+1,10);
+        break;
+      case 2:
+        return parseInt(Math.random()*(maxNum-minNum+1)+minNum,10);
+        break;
+      default:
+        return 0;
+        break;
+    }
+  }
+  ;$(function() {
+    setStatus('Socket服务未连接!')
+    _ws.initDefaultImSocket();
+  });
+
+</script>
+</html>

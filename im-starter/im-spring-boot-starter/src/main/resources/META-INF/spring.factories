@@ -1,0 +1,3 @@
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+com.itic.im.spring.ImBeanRegister,\
+com.itic.im.spring.ImBeanInject
